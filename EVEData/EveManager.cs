@@ -1705,6 +1705,13 @@ namespace SMT.EVEData
                 ValidShipGroupIDs.Add("1876"); //  Engineering Complex
                 ValidShipGroupIDs.Add("1924"); //  Forward Operating Base
 
+                // newer deployables (added post initial data gen)
+                ValidShipGroupIDs.Add("4079"); //  Encounter Surveillance System
+                ValidShipGroupIDs.Add("4093"); //  Mobile Cynosural Beacon
+                ValidShipGroupIDs.Add("4107"); //  Mobile Observatory
+                ValidShipGroupIDs.Add("4137"); //  CONCORD Rogue Analysis Beacon
+                ValidShipGroupIDs.Add("4142"); //  Rogue Drone Infestation Data
+
                 StreamReader file = new StreamReader(eveStaticDataItemTypesFile);
 
                 // read the headers..
@@ -1750,6 +1757,16 @@ namespace SMT.EVEData
             ShipTypes.Add("89648", "Venture Consortium Issue");
             ShipTypes.Add("89647", "Pioneer Consortium Issue");
             ShipTypes.Add("89607", "Odysseus");
+
+            // Deployable items — add manually so they appear in ZKB kills instead of "Unknown"
+            ShipTypes.Add("57319", "Mobile Cynosural Beacon");
+            ShipTypes.Add("58906", "Highsec Authorized Mobile Cynosural Beacon");
+            ShipTypes.Add("59630", "Covert Mobile Cynosural Beacon");
+            ShipTypes.Add("58904", "Mobile Observatory");
+            ShipTypes.Add("75677", "QA 'Shady' Mobile Observatory");
+            ShipTypes.Add("55914", "Encounter Surveillance System");
+            ShipTypes.Add("60244", "CONCORD Rogue Analysis Beacon");
+            ShipTypes.Add("60459", "Rogue Drone Infestation Data");
 
 
 
@@ -2453,6 +2470,16 @@ namespace SMT.EVEData
                 }
                 catch { }
             }
+
+            // Hardcoded Chinese names for deployable items not yet in built-in cache
+            ShipTypesCN["57319"] = "移动诱导信标";
+            ShipTypesCN["58906"] = "高安授权移动诱导信标";
+            ShipTypesCN["59630"] = "隐秘移动诱导信标";
+            ShipTypesCN["58904"] = "移动观测站";
+            ShipTypesCN["75677"] = "移动观测站（测试）";
+            ShipTypesCN["55914"] = "遭遇监控系统";
+            ShipTypesCN["60244"] = "统合部游寇分析信标";
+            ShipTypesCN["60459"] = "游寇无人机感染数据";
         }
 
         /// <summary>
