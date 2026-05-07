@@ -44,6 +44,7 @@ namespace SMT.EVEData
         // App-wide UI language and English→localized string map (loaded from Translation.csv)
         public static string CurrentLanguage { get; set; } = "en-US";
         public static Dictionary<string, string> Translations { get; set; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        public static Dictionary<string, string> ChineseToEnglish { get; set; } = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         /// <summary>
         /// singleton instance of this class
         /// </summary>
@@ -230,6 +231,10 @@ namespace SMT.EVEData
                             {
                                 Translations.Add(en, zh);
                                 count++;
+                            }
+                            if (!string.IsNullOrEmpty(zh) && !ChineseToEnglish.ContainsKey(zh))
+                            {
+                                ChineseToEnglish.Add(zh, en);
                             }
                         }
                     }
@@ -2250,6 +2255,13 @@ namespace SMT.EVEData
             {
                 NameToSystem[s.Name] = s;
                 IDToSystem[s.ID] = s;
+
+                // Add Chinese name as alternate lookup key
+                if (Translations.TryGetValue(s.Name, out string zhName) && !string.IsNullOrEmpty(zhName))
+                {
+                    if (!NameToSystem.ContainsKey(zhName))
+                        NameToSystem[zhName] = s;
+                }
             }
 
             // now add the beacons
@@ -3181,7 +3193,8 @@ namespace SMT.EVEData
         {
             string userAgent = "SMT/" + EveAppConfig.SMT_VERSION + EveAppConfig.SMT_USERAGENT_DETAILS;
             EveApiClient = new EVEStandardAPI(userAgent, DataSource.Tranquility, CompatibilityDate.v2025_12_16, TimeSpan.FromSeconds(30));
-            Sso = new SSOv2(DataSource.Tranquility, EveAppConfig.CallbackURL, EveAppConfig.ClientID, null);
+            if (!string.IsNullOrEmpty(EveAppConfig.ClientID))
+                Sso = new SSOv2(DataSource.Tranquility, EveAppConfig.CallbackURL, EveAppConfig.ClientID, null);
 
             ESIScopes = new List<string>
             {
@@ -3488,12 +3501,15 @@ namespace SMT.EVEData
 
                             if(newIntelString != null)
                             {
-                                foreach(EVEData.IntelData idl in IntelDataList)
+                                lock (IntelDataList)
                                 {
-                                    if(idl.IntelString == newIntelString && (DateTime.Now - idl.IntelTime).Seconds < 5)
+                                    foreach(EVEData.IntelData idl in IntelDataList)
                                     {
-                                        addToIntel = false;
-                                        break;
+                                        if(idl.IntelString == newIntelString && (DateTime.UtcNow - idl.IntelTime).TotalSeconds < 5)
+                                        {
+                                            addToIntel = false;
+                                            break;
+                                        }
                                     }
                                 }
                             }
@@ -3520,31 +3536,53 @@ namespace SMT.EVEData
                             {
                                 EVEData.IntelData id = new EVEData.IntelData(line, channelName);
 
-                                foreach(string s in id.IntelString.Split(' '))
+                                foreach(string rawWord in id.IntelString.Split(' '))
                                 {
-                                    if(s == "" || s.Length < 3)
+                                    if(rawWord == "" || rawWord.Length < 3)
                                     {
                                         continue;
                                     }
 
+                                    // Strip trailing punctuation
+                                    string s = rawWord.TrimEnd('*', '.', ',', '!', '?', ':', ';');
+
                                     foreach(String clearMarker in IntelClearFilters)
                                     {
-                                        if(clearMarker.IndexOf(s, StringComparison.OrdinalIgnoreCase) == 0)
+                                        if(s.IndexOf(clearMarker, StringComparison.OrdinalIgnoreCase) != -1)
                                         {
                                             id.ClearNotification = true;
                                         }
                                     }
 
+                                    // Resolve Chinese name to English for matching
+                                    string englishWord = s;
+                                    bool isChinese = ChineseToEnglish.TryGetValue(s, out string resolvedEn);
+                                    if (isChinese && !string.IsNullOrEmpty(resolvedEn))
+                                        englishWord = resolvedEn;
+
                                     foreach(System sys in Systems)
                                     {
-                                        if(sys.Name.IndexOf(s, StringComparison.OrdinalIgnoreCase) == 0 || s.IndexOf(sys.Name, StringComparison.OrdinalIgnoreCase) == 0)
+                                        // Match the (possibly translated) word against English system name
+                                        if(sys.Name.IndexOf(englishWord, StringComparison.OrdinalIgnoreCase) == 0 ||
+                                           englishWord.IndexOf(sys.Name, StringComparison.OrdinalIgnoreCase) == 0)
+                                        {
+                                            id.Systems.Add(sys.Name);
+                                        }
+                                        // Also match against Chinese system name if we have one
+                                        else if (Translations.TryGetValue(sys.Name, out string zhSysName) &&
+                                                 !string.IsNullOrEmpty(zhSysName) &&
+                                                 (zhSysName.IndexOf(s, StringComparison.OrdinalIgnoreCase) == 0 ||
+                                                  s.IndexOf(zhSysName, StringComparison.OrdinalIgnoreCase) == 0))
                                         {
                                             id.Systems.Add(sys.Name);
                                         }
                                     }
                                 }
 
-                                IntelDataList.Enqueue(id);
+                                lock (IntelDataList)
+                                {
+                                    IntelDataList.Enqueue(id);
+                                }
 
                                 if(IntelUpdatedEvent != null)
                                 {
@@ -3560,8 +3598,9 @@ namespace SMT.EVEData
 
                     intelFileReadPos[changedFile] = fileReadFrom;
                 }
-                catch
+                catch (Exception ex)
                 {
+                    global::System.Diagnostics.Debug.WriteLine($"IntelFileWatcher error: {ex.Message}");
                 }
             }
             else

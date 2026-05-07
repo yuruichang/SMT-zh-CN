@@ -16,7 +16,7 @@ namespace SMT.EVEData
         /// <summary>
         /// Client ID from the EVE Developer setup
         /// </summary>
-        public const string ClientID = "";
+        public const string ClientID = "c7d20420abb6437e8751090f24872a6f";
 
         /// <summary>
         /// SMT Version Tagline

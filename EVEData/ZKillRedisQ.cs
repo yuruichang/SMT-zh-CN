@@ -91,12 +91,12 @@ namespace SMT.EVEData
                         ZKBData.SequenceData seqData = ZKBData.SequenceData.FromJson(seqContent);
                         if (seqData != null)
                         {
-                            currentSequence = seqData.Sequence;
+                            currentSequence = seqData.Sequence + 1;
                         }
                     }
                     if (currentSequence == 0)
                     {
-                        nextPollTime = DateTime.Now.AddSeconds(6);
+                        nextPollTime = DateTime.Now.AddSeconds(2);
                         e.Result = 0;
                         return;
                     }
@@ -107,7 +107,7 @@ namespace SMT.EVEData
 
                 if (response.StatusCode == HttpStatusCode.NotFound)
                 {
-                    nextPollTime = DateTime.Now.AddSeconds(6);
+                    nextPollTime = DateTime.Now.AddSeconds(2);
                     e.Result = 0;
                     return;
                 }
@@ -130,7 +130,7 @@ namespace SMT.EVEData
                         zs.VictimCharacterID = r2z2Data.Esi.Victim.CharacterId;
                         zs.VictimCorpID = r2z2Data.Esi.Victim.CorporationId;
                         zs.SystemName = EveManager.Instance.GetEveSystemNameFromID((int)r2z2Data.Esi.SolarSystemId);
-                        zs.KillTime = r2z2Data.Esi.KillmailTime.ToLocalTime();
+                        zs.KillTime = r2z2Data.Esi.KillmailTime;
 
                         zs.ShipTypeID = r2z2Data.Esi.Victim.ShipTypeId;
                         string shipID = zs.ShipTypeID.ToString();
@@ -190,7 +190,7 @@ namespace SMT.EVEData
                     }
                 }
 
-                if(KillStream[i].KillTime + TimeSpan.FromMinutes(KillExpireTimeMinutes) < DateTimeOffset.Now)
+                if(KillStream[i].KillTime + TimeSpan.FromMinutes(KillExpireTimeMinutes) < DateTimeOffset.UtcNow)
                 {
                     KillStream.RemoveAt(i);
 
