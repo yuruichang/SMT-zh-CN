@@ -5416,4 +5416,11 @@
       <string>Odysseus</string>
     </value>
   </item>
+  <item><key><string>57319</string></key><value><string>Mobile Cynosural Beacon</string></value></item>
+  <item><key><string>58906</string></key><value><string>Highsec Authorized Mobile Cynosural Beacon</string></value></item>
+  <item><key><string>59630</string></key><value><string>Covert Mobile Cynosural Beacon</string></value></item>
+  <item><key><string>58904</string></key><value><string>Mobile Observatory</string></value></item>
+  <item><key><string>55914</string></key><value><string>Encounter Surveillance System</string></value></item>
+  <item><key><string>60244</string></key><value><string>CONCORD Rogue Analysis Beacon</string></value></item>
+  <item><key><string>60459</string></key><value><string>Rogue Drone Infestation Data</string></value></item>
 </dictionary>
