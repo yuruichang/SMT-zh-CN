@@ -3362,7 +3362,8 @@ namespace SMT.EVEData
 
                                     foreach(System sys in Systems)
                                     {
-                                        if(sys.Name.IndexOf(s, StringComparison.OrdinalIgnoreCase) == 0 || s.IndexOf(sys.Name, StringComparison.OrdinalIgnoreCase) == 0)
+                                        // Exact match — system names are standalone space-delimited tokens
+                                        if(string.Equals(sys.Name, s, StringComparison.OrdinalIgnoreCase))
                                         {
                                             id.Systems.Add(sys.Name);
                                         }
