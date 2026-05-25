@@ -1,4 +1,10 @@
+using System;
+using System.IO;
+using System.Linq;
+using System.Net.Http;
+using System.Threading.Tasks;
 using System.Windows;
+using System.Windows.Markup;
 using SMT.EVEData;
 
 namespace SMTAlert
@@ -8,6 +14,12 @@ namespace SMTAlert
     /// </summary>
     public partial class App : Application
     {
+        /// <summary>Current version of the application.</summary>
+        public const string AppVersion = "2.0";
+
+        /// <summary>GitHub repository path for update checks.</summary>
+        public const string GitHubRepo = "yuruichang/SMTAlert";
+
         public static AlertConfig Config { get; private set; }
         public static CharacterManager CharacterMgr { get; private set; }
         public static ZKillRedisQ ZKillFeed { get; private set; }
@@ -68,9 +80,10 @@ namespace SMTAlert
             CharacterMgr.Initialize();
             CharacterMgr.CharactersChanged += OnCharactersChanged;
 
-            // Set active character (first one if available)
+            // Set active character (first one if available) and auto-monitor
             if (CharacterMgr.Characters.Count > 0)
             {
+                CharacterMgr.Characters[0].IsMonitored = true;
                 ActiveCharacter = CharacterMgr.Characters[0];
                 ActiveCharacter.IsActiveMonitor = true;
             }
@@ -88,6 +101,66 @@ namespace SMTAlert
                         item.RefreshShipTypeDisplay();
                 });
             });
+
+            // Check for updates on GitHub
+            _ = CheckForUpdateAsync();
+        }
+
+        /// <summary>
+        /// Checks the latest release on GitHub and prompts the user if a newer version is available.
+        /// </summary>
+        private static async Task CheckForUpdateAsync()
+        {
+            try
+            {
+                using var client = new HttpClient();
+                client.DefaultRequestHeaders.UserAgent.ParseAdd("SMTAlert");
+                client.DefaultRequestHeaders.Accept.ParseAdd("application/vnd.github.v3+json");
+
+                var response = await client.GetStringAsync($"https://api.github.com/repos/{GitHubRepo}/releases/latest");
+                var json = System.Text.Json.JsonDocument.Parse(response);
+                var latestTag = json.RootElement.GetProperty("tag_name").GetString();
+                var releaseUrl = json.RootElement.GetProperty("html_url").GetString();
+
+                if (string.IsNullOrEmpty(latestTag)) return;
+
+                // Strip leading "v" if present and compare versions
+                string latestVersionStr = latestTag.TrimStart('v');
+                string currentVersionStr = AppVersion;
+
+                if (Version.TryParse(latestVersionStr, out var latestVersion) &&
+                    Version.TryParse(currentVersionStr, out var currentVersion) &&
+                    latestVersion > currentVersion)
+                {
+                    // New version available — prompt on UI thread
+                    var appWindow = Current?.Dispatcher;
+                    if (appWindow == null) return;
+
+                    await appWindow.InvokeAsync(() =>
+                    {
+                        string msg = string.Format(
+                            (string)Current.TryFindResource("Update_Available") ??
+                            "A new version is available!\n\nCurrent: {0}\nLatest: {1}\n\nOpen the release page to download?",
+                            currentVersionStr, latestVersionStr);
+
+                        string title = (string)Current.TryFindResource("Update_Title") ?? "Update Available";
+
+                        if (MessageBox.Show(AppWindow, msg, title, MessageBoxButton.YesNo, MessageBoxImage.Information) == MessageBoxResult.Yes)
+                        {
+                            if (!string.IsNullOrEmpty(releaseUrl))
+                                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                                {
+                                    FileName = releaseUrl,
+                                    UseShellExecute = true
+                                });
+                        }
+                    });
+                }
+            }
+            catch
+            {
+                // Silently ignore network/parse errors — update check is non-critical
+            }
         }
 
         private static void UpdateIntelChannelFilter()
@@ -135,8 +208,15 @@ namespace SMTAlert
         {
             if (ActiveCharacter == null && CharacterMgr.Characters.Count > 0)
             {
+                CharacterMgr.Characters[0].IsMonitored = true;
                 ActiveCharacter = CharacterMgr.Characters[0];
                 ActiveCharacter.IsActiveMonitor = true;
+            }
+
+            // Ensure at least one character is monitored
+            if (CharacterMgr.Characters.Count > 0 && !CharacterMgr.Characters.Any(c => c.IsMonitored))
+            {
+                CharacterMgr.Characters[0].IsMonitored = true;
             }
         }
 
@@ -165,10 +245,16 @@ namespace SMTAlert
                 }
             }
 
-            var newDict = new ResourceDictionary
+            // Load synchronously via XamlReader to ensure resources are available immediately
+            var baseDir = AppDomain.CurrentDomain.BaseDirectory;
+            var filePath = Path.Combine(baseDir, "Languages", $"{langCode}.xaml");
+            ResourceDictionary newDict;
+            using (var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read))
             {
-                Source = new Uri($"Languages/{langCode}.xaml", UriKind.Relative)
-            };
+                newDict = (ResourceDictionary)XamlReader.Load(fs);
+            }
+            newDict.Source = new Uri($"Languages/{langCode}.xaml", UriKind.Relative);
+
             Current.Resources.MergedDictionaries.Add(newDict);
             if (oldDict != null)
                 Current.Resources.MergedDictionaries.Remove(oldDict);

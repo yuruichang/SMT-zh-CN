@@ -3545,45 +3545,56 @@ namespace SMT.EVEData
                             {
                                 EVEData.IntelData id = new EVEData.IntelData(line, channelName);
 
-                                foreach(string rawWord in id.IntelString.Split(' '))
+                                // Split by 2+ spaces to get entity segments (character names, ship types, systems, etc.)
+                                // Within a segment, single spaces connect words belonging to the same entity.
+                                // This prevents multi-word character names from being split into individual
+                                // words that could falsely match system names.
+                                var segments = Regex.Split(id.IntelString, @"\s{2,}");
+                                foreach (var segment in segments)
                                 {
-                                    if(rawWord == "" || rawWord.Length < 3)
-                                    {
-                                        continue;
-                                    }
+                                    if (string.IsNullOrWhiteSpace(segment)) continue;
 
-                                    // Strip trailing punctuation
-                                    string s = rawWord.TrimEnd('*', '.', ',', '!', '?', ':', ';');
-
-                                    foreach(String clearMarker in IntelClearFilters)
+                                    foreach (string rawWord in segment.Split(' ', StringSplitOptions.RemoveEmptyEntries))
                                     {
-                                        if(s.IndexOf(clearMarker, StringComparison.OrdinalIgnoreCase) != -1)
+                                        if (rawWord.Length < 3) continue;
+
+                                        // Strip trailing punctuation
+                                        string s = rawWord.TrimEnd('*', '.', ',', '!', '?', ':', ';');
+
+                                        // Skip words that are entirely punctuation after trimming
+                                        if (string.IsNullOrEmpty(s)) continue;
+
+                                        foreach (String clearMarker in IntelClearFilters)
                                         {
-                                            id.ClearNotification = true;
+                                            if (s.IndexOf(clearMarker, StringComparison.OrdinalIgnoreCase) != -1)
+                                            {
+                                                id.ClearNotification = true;
+                                            }
                                         }
-                                    }
 
-                                    // Resolve Chinese name to English for matching
-                                    string englishWord = s;
-                                    bool isChinese = ChineseToEnglish.TryGetValue(s, out string resolvedEn);
-                                    if (isChinese && !string.IsNullOrEmpty(resolvedEn))
-                                        englishWord = resolvedEn;
+                                        // Resolve Chinese name to English for matching
+                                        string englishWord = s;
+                                        bool isChinese = ChineseToEnglish.TryGetValue(s, out string resolvedEn);
+                                        if (isChinese && !string.IsNullOrEmpty(resolvedEn))
+                                            englishWord = resolvedEn;
 
-                                    foreach(System sys in Systems)
-                                    {
-                                        // Match the (possibly translated) word against English system name
-                                        if(sys.Name.IndexOf(englishWord, StringComparison.OrdinalIgnoreCase) == 0 ||
-                                           englishWord.IndexOf(sys.Name, StringComparison.OrdinalIgnoreCase) == 0)
+                                        foreach (System sys in Systems)
                                         {
-                                            id.Systems.Add(sys.Name);
-                                        }
-                                        // Also match against Chinese system name if we have one
-                                        else if (Translations.TryGetValue(sys.Name, out string zhSysName) &&
-                                                 !string.IsNullOrEmpty(zhSysName) &&
-                                                 (zhSysName.IndexOf(s, StringComparison.OrdinalIgnoreCase) == 0 ||
-                                                  s.IndexOf(zhSysName, StringComparison.OrdinalIgnoreCase) == 0))
-                                        {
-                                            id.Systems.Add(sys.Name);
+                                            // System name starts with the intel word (prefix match supports abbreviations)
+                                            // OR exact match against English system name
+                                            if (sys.Name.StartsWith(englishWord, StringComparison.OrdinalIgnoreCase))
+                                            {
+                                                if (!id.Systems.Contains(sys.Name))
+                                                    id.Systems.Add(sys.Name);
+                                            }
+                                            // Also match against Chinese system name if we have one
+                                            else if (Translations.TryGetValue(sys.Name, out string zhSysName) &&
+                                                     !string.IsNullOrEmpty(zhSysName) &&
+                                                     zhSysName.StartsWith(s, StringComparison.OrdinalIgnoreCase))
+                                            {
+                                                if (!id.Systems.Contains(sys.Name))
+                                                    id.Systems.Add(sys.Name);
+                                            }
                                         }
                                     }
                                 }
